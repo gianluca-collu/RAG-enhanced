@@ -3,9 +3,9 @@ import sys
 from pathlib import Path
 
 from rag.config import Config
-from rag.client import RagClient
-from rag.chat import ChatEngine
-from rag.utils import Logger
+from rag.rag_client import RagClient
+from rag.query import ChatEngine
+from rag.logger import Logger
 
 
 logger = Logger("RAGSimple-CLI")

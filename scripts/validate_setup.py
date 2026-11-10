@@ -109,7 +109,7 @@ def check_rag_client():
     print("\nTesting RAG client import...")
 
     try:
-        from rag.client import RagClient
+        from rag.rag_client import RagClient
 
         print(f"  OK {RagClient.__name__} can be imported")
         return True

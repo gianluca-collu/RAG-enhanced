@@ -3,8 +3,8 @@ __author__ = "ASPI Development Team"
 __description__ = "A lightweight, production-ready RAG chatbot framework"
 
 from rag.config import Config
-from rag.client import RagClient
-from rag.chat import ChatEngine
+from rag.rag_client import RagClient
+from rag.query import ChatEngine
 
 __all__ = [
     "Config",

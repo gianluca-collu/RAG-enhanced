@@ -10,16 +10,16 @@ from pathlib import Path
 from openai import AzureOpenAI
 
 from .chunk_record import chunk_to_record
-from ..document_intelligence import create_document_intelligence_client
-from ..vision import create_vision_client
-from .extractors.chunk_assembler import Chunk, ChunkAssembler
-from .extractors.document_normalizer import DocumentNormalizer, NormalizedDocument
-from .extractors.metadata_extractor import MetadataExtractor
-from .extractors.section_assembler import SectionAssembler
-from .extractors.semantic_enricher import SemanticEnricher
-from .extractors.structure_analyzer import Section, StructureAnalyzer
-from .extractors.vision_describer import VisionDescriber
-from .extractors.visual_processor import VisualProcessor
+from .document_intelligence import create_document_intelligence_client
+from .vision import create_vision_client
+from .steps.chunk_assembler import Chunk, ChunkAssembler
+from .steps.document_normalizer import DocumentNormalizer, NormalizedDocument
+from .steps.metadata_extractor import MetadataExtractor
+from .steps.section_assembler import SectionAssembler
+from .steps.semantic_enricher import SemanticEnricher
+from .steps.structure_analyzer import Section, StructureAnalyzer
+from .steps.vision_describer import VisionDescriber
+from .steps.visual_processor import VisualProcessor
 
 
 
@@ -130,6 +130,7 @@ class DocumentChunker:
         doc_type = source.suffix.lower().lstrip(".")
 
         logger.info("%s (.%s)", source.name, doc_type)
+        # Step 1: normalize the source document.
         normalized_document = self.normalizer.normalize(source)
         logger.info(
             "   Pagine: %d | Markdown: %d car",
@@ -137,13 +138,24 @@ class DocumentChunker:
             len(normalized_document.markdown),
         )
 
+        # Step 2: analyze the normalized Markdown into sections.
         analyzed_sections = self.analyzer.analyze(normalized_document.markdown, doc_id)
         visual_sections = analyzed_sections
+
+        # Step 3: enrich sections with visual descriptions when enabled.
         if self.visual_processor is not None:
             visual_sections = self.visual_processor.process(normalized_document, analyzed_sections)
+
+        # Step 4: assemble the analyzed sections into a document structure.
         assembled_sections = self.section_assembler.assemble(visual_sections)
+
+        # Step 5: add source metadata to the assembled sections.
         sections_with_metadata = self.metadata_extractor.extract(assembled_sections, source)
+
+        # Step 6: enrich the sections with semantic metadata.
         enriched_sections = self.semantic_enricher.enrich(sections_with_metadata)
+
+        # Step 7: create the final chunks.
         chunks = self.assembler.assemble(enriched_sections)
 
         if not chunks:

@@ -1,8 +1,9 @@
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from rag.client.chunking.document_chunker import DocumentChunker
-from rag.client.chunking.indexing_pipeline import IndexingPipeline
+from rag.ingestion.document_chunker import DocumentChunker
+from rag.ingestion.indexing_pipeline import IndexingPipeline
+from rag.ingestion.pipeline import IngestionPipeline
 
 
 def test_index_result_inserts_contextualized_chunks():
@@ -80,4 +81,57 @@ def test_document_chunker_runs_stages_in_order(tmp_path):
         "enrich",
         "make_chunks",
     ]
+    assert chunker.analyzer.analyze.call_args.args == (normalized.markdown, "doc-1")
+    assert chunker.section_assembler.assemble.call_args.args == (raw_sections,)
+    assert chunker.metadata_extractor.extract.call_args.args == (structured_sections, source)
+    assert chunker.semantic_enricher.enrich.call_args.args == (metadata_sections,)
+    assert chunker.assembler.assemble.call_args.args == (enriched_sections,)
     assert result.chunks == chunks
+
+
+def test_ingestion_pipeline_passes_state_through_ordered_steps(tmp_path):
+    source = tmp_path / "manuale.pdf"
+    source.write_bytes(b"input")
+    config = SimpleNamespace(
+        document_intelligence_endpoint="https://example.test",
+        document_intelligence_key="placeholder",
+    )
+    chunking_result = SimpleNamespace(
+        doc_id="doc-1",
+        source=source.name,
+        chunks=["chunk-1", "chunk-2"],
+    )
+    chunker = MagicMock()
+    chunker.run.return_value = chunking_result
+    indexer = MagicMock()
+    indexer.index_result.return_value = 2
+    pipeline = IngestionPipeline(config, index=MagicMock(), logger=MagicMock())
+
+    steps = MagicMock()
+    step_names = [
+        "_step_1_validate",
+        "_step_2_chunk",
+        "_step_3_index",
+        "_step_4_build_result",
+    ]
+    for name in step_names:
+        step = MagicMock(wraps=getattr(pipeline, name))
+        setattr(pipeline, name, step)
+        steps.attach_mock(step, name)
+
+    with patch("rag.ingestion.pipeline.DocumentChunker", return_value=chunker), patch(
+        "rag.ingestion.pipeline.IndexingPipeline", return_value=indexer
+    ):
+        result = pipeline.run(source)
+
+    assert [call[0] for call in steps.mock_calls] == step_names
+    states = [getattr(pipeline, name).call_args.args[0] for name in step_names]
+    assert all(state is states[0] for state in states)
+    chunker.run.assert_called_once_with(source)
+    indexer.index_result.assert_called_once_with(chunking_result)
+    assert result == {
+        "doc_id": "doc-1",
+        "source": "manuale.pdf",
+        "chunk_count": 2,
+        "indexed_count": 2,
+    }

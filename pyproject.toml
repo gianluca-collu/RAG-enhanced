@@ -81,7 +81,7 @@ Issues = "https://github.com/yourusername/ragsimple/issues"
 include = ["rag*"]
 
 [tool.setuptools.package-data]
-"rag.chat" = ["prompts.json"]
+"rag.query" = ["prompts.json"]
 
 [tool.black]
 line-length = 120

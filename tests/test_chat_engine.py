@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock
-from rag.chat import ChatEngine
+from rag.query import ChatEngine
 
 
 class TestChatEngine:

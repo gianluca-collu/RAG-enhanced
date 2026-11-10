@@ -14,7 +14,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
 
-from rag.client.rag_client import RagClient
+from rag.rag_client import RagClient
 from rag.config import Config
 
 load_dotenv()

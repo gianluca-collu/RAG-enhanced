@@ -1,8 +1,13 @@
-from typing import Dict, List, Any, Optional
-from rag.client import RagClient
-from rag.chat.prompts import RAG_SYSTEM_PROMPT
-from rag.chat.memory import ChatMemoryManager
-from rag.utils import Logger
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict, List, Any, Optional
+
+from rag.query.prompts import RAG_SYSTEM_PROMPT
+from rag.query.memory import ChatMemoryManager
+from rag.logger import Logger
+
+if TYPE_CHECKING:
+    from rag.rag_client import RagClient
 
 
 class ChatEngine:
