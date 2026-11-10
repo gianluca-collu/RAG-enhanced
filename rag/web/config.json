@@ -1,0 +1,12 @@
+{
+    "page_title": "RAGSimple - Conversational AI",
+    "page_icon": "🤖",
+    "layout": "wide",
+    "show_payload": false,
+    "enable_analytics": false,
+    "theme": "light",
+    "sidebar": {
+        "show_config": true,
+        "show_history": true
+    }
+}

@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  ragsimple-web:
+    build: .
+    container_name: ragsimple-web
+    env_file: .env
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_URL=${OPENAI_URL}
+      - OPENAI_KEY=${OPENAI_KEY}
+      - OPENAI_MODEL=gpt-4o
+      - OPENAI_DEPLOYMENT_NAME=${OPENAI_DEPLOYMENT_NAME:-gpt-4o}
+      - SEARCH_URL=${SEARCH_URL}
+      - SEARCH_KEY=${SEARCH_KEY}
+      - INDEX_NAME=${INDEX_NAME}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-ada-002}
+      - EMBEDDING_DEPLOYMENT_NAME=${EMBEDDING_DEPLOYMENT_NAME:-text-embedding-ada-002}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-1536}
+      - DOCUMENT_INTELLIGENCE_ENDPOINT=${DOCUMENT_INTELLIGENCE_ENDPOINT}
+      - DOCUMENT_INTELLIGENCE_KEY=${DOCUMENT_INTELLIGENCE_KEY}
+      - API_KEY=${API_KEY}
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./rag:/app/rag
+      - ./output:/app/output
+    networks:
+      - ragsimple-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  ragsimple-api:
+    build: .
+    container_name: ragsimple-api
+    command: ["uvicorn", "rag.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_URL=${OPENAI_URL}
+      - OPENAI_KEY=${OPENAI_KEY}
+      - OPENAI_MODEL=gpt-4o
+      - OPENAI_DEPLOYMENT_NAME=${OPENAI_DEPLOYMENT_NAME:-gpt-4o}
+      - SEARCH_URL=${SEARCH_URL}
+      - SEARCH_KEY=${SEARCH_KEY}
+      - INDEX_NAME=${INDEX_NAME}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-ada-002}
+      - EMBEDDING_DEPLOYMENT_NAME=${EMBEDDING_DEPLOYMENT_NAME:-text-embedding-ada-002}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-1536}
+      - DOCUMENT_INTELLIGENCE_ENDPOINT=${DOCUMENT_INTELLIGENCE_ENDPOINT}
+      - DOCUMENT_INTELLIGENCE_KEY=${DOCUMENT_INTELLIGENCE_KEY}
+      - API_KEY=${API_KEY}
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./rag:/app/rag
+    networks:
+      - ragsimple-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  ragsimple-network:
+    driver: bridge
+

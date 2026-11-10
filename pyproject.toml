@@ -1,0 +1,100 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ragsimple"
+version = "1.0.0"
+description = "A lightweight, production-ready RAG chatbot framework"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "ASPI Development Team"},
+]
+keywords = ["rag", "chatbot", "azure", "llm", "llama-index"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "streamlit==1.43.2",
+    "fastapi==0.115.8",
+    "python-multipart>=0.0.9",
+    "uvicorn[standard]==0.30.3",
+    "python-dotenv==1.0.0",
+    "pydantic==2.8.2",
+    "pydantic-settings==2.1.0",
+    "azure-identity==1.21.0",
+    "azure-ai-documentintelligence>=1.0.0,<2.0.0",
+    "azure-search-documents==11.5.2",
+    "azure-keyvault-secrets==4.9.0",
+    "azure-keyvault-keys==4.10.0",
+    "openai==1.58.1",
+    "llama-index==0.12.33",
+    "llama-index-core==0.12.33.post1",
+    "llama-index-llms-azure-openai==0.3.0",
+    "llama-index-llms-openai==0.3.17",
+    "llama-index-embeddings-azure-openai==0.3.0",
+    "llama-index-embeddings-openai==0.3.1",
+    "llama-index-vector-stores-azureaisearch==0.3.7",
+    "markdownify>=0.13.1,<1.0",
+    "tiktoken>=0.7.0,<1.0",
+    "openpyxl>=3.1.0,<4.0",
+    "requests==2.32.3",
+    "click==8.1.7",
+    "rich==13.7.0",
+    "loguru==0.7.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.4",
+    "pytest-cov==4.1.0",
+    "pytest-asyncio==0.23.3",
+    "pytest-mock==3.13.0",
+    "black==23.12.1",
+    "ruff==0.2.1",
+    "mypy==1.8.0",
+    "isort==5.13.2",
+    "ipython==8.20.0",
+    "notebook==7.0.7",
+]
+
+[project.scripts]
+ragsimple = "rag.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/ragsimple"
+Documentation = "https://github.com/yourusername/ragsimple/wiki"
+Repository = "https://github.com/yourusername/ragsimple.git"
+Issues = "https://github.com/yourusername/ragsimple/issues"
+
+[tool.setuptools.packages.find]
+include = ["rag*"]
+
+[tool.setuptools.package-data]
+"rag.chat" = ["prompts.json"]
+
+[tool.black]
+line-length = 120
+target-version = ['py39', 'py310', 'py311']
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+select = ["E", "F", "W"]
+ignore = ["E501", "W503"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
