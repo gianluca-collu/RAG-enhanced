@@ -141,7 +141,7 @@ class VisionDescriber:
 
             if "DIAGRAM" in answer:
                 return "DIAGRAM"
-            
+
             return "IMAGE"
 
         except Exception as error:

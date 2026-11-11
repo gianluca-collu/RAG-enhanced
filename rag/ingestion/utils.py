@@ -1,4 +1,3 @@
-import io
 import logging
 from collections import defaultdict
 from datetime import datetime
@@ -63,29 +62,29 @@ def generate_kb_report(settings, kb_index: str = None) -> Path:
         doc_id = d.get("doc_id")
         s = stats[doc_id]
         s["chunks"] += 1
-        
+
         # Metadata is stored as a JSON string in the new schema
         try:
             metadata = json.loads(d.get("metadata") or "{}")
         except (json.JSONDecodeError, TypeError):
             metadata = {}
-        
+
         # Extract metadata fields (if they exist)
         ct = metadata.get("content_type", "TEXT")
         s[ct] = s.get(ct, 0) + 1
-        
+
         page = metadata.get("page")
         if page is not None:
             s["pages"].add(page)
-        
+
         section = metadata.get("section_path")
         if section:
             s["sections"].add(section)
-        
+
         summary = metadata.get("summary", "")
         if (summary or "").strip():
             s["with_summary"] += 1
-        
+
         kws = metadata.get("keywords") or []
         if kws:
             s["with_keywords"] += 1

@@ -6,7 +6,8 @@ import logging
 from pathlib import Path
 
 from llama_index.core import VectorStoreIndex
-from llama_index.core.schema import TextNode
+from llama_index.core.base.embeddings.base import BaseEmbedding
+from llama_index.core.schema import MetadataMode, NodeRelationship, RelatedNodeInfo, TextNode
 
 from .chunk_record import chunk_to_record
 
@@ -16,8 +17,9 @@ logger = logging.getLogger(__name__)
 class IndexingPipeline:
     """Write chunk nodes through the vector index owned by RagClient."""
 
-    def __init__(self, index: VectorStoreIndex) -> None:
+    def __init__(self, index: VectorStoreIndex, embed_model: BaseEmbedding) -> None:
         self.index = index
+        self.embed_model = embed_model
 
     def index_jsonl(self, path: str | Path) -> int:
         """Index chunks from JSONL file.
@@ -59,6 +61,8 @@ class IndexingPipeline:
         if not chunks:
             logger.warning("No chunks to index")
             return 0
+        if not document_id or document_id == "unknown":
+            raise ValueError("A stable document_id is required to index and replace document chunks")
 
         nodes = []
         for position, chunk in enumerate(chunks):
@@ -74,6 +78,7 @@ class IndexingPipeline:
                 "breadcrumb": " > ".join(str(part) for part in breadcrumb),
                 "content_type": chunk.get("content_type", "TEXT"),
                 "source": chunk.get("source", ""),
+                "source_version": (chunk.get("metadata") or {}).get("source_version", ""),
                 "token_count": chunk.get("token_count", 0),
             })
             if chunk.get("page") is not None:
@@ -86,9 +91,19 @@ class IndexingPipeline:
                 id_=chunk.get("chunk_id") or f"{document_id}:{position}",
                 text=text,
                 metadata=metadata,
+                relationships={
+                    NodeRelationship.SOURCE: RelatedNodeInfo(node_id=document_id),
+                },
             ))
 
         if nodes:
+            texts = [node.get_content(metadata_mode=MetadataMode.EMBED) for node in nodes]
+            embeddings = self.embed_model.get_text_embedding_batch(texts)
+            if len(embeddings) != len(nodes):
+                raise RuntimeError("Embedding count does not match the number of indexed chunks")
+            for node, embedding in zip(nodes, embeddings):
+                node.embedding = embedding
+            self.index.delete_ref_doc(document_id, delete_from_docstore=True)
             self.index.insert_nodes(nodes)
         logger.info("Indexed %d chunks", len(nodes))
         return len(nodes)

@@ -11,25 +11,28 @@ class SectionAssembler:
         return sections
 
     def _merge_blocks(self, blocks: list[Block]) -> list[Block]:
-        """Fonde i frammenti di tabella (stesso numero di colonne) nella
-        sezione, anche se separati da immagini o header di pagina."""
+        """Merge only adjacent table fragments with matching columns and headers."""
         merged: list[Block] = []
-        table_by_cols: dict[int, Block] = {}   # n_colonne -> tabella gia' in merged
 
         for block in blocks:
-            if block.type == "TABLE":
-                cols = self._cols(block)
-                if cols in table_by_cols:
-                    # Frammento della stessa tabella: appendi al blocco esistente.
-                    table_by_cols[cols].content += "\n" + block.content
-                else:
-                    new_block = Block(block.type, block.content, block.page)
-                    merged.append(new_block)
-                    table_by_cols[cols] = new_block
+            if (
+                block.type == "TABLE"
+                and merged
+                and merged[-1].type == "TABLE"
+                and self._cols(merged[-1]) == self._cols(block)
+                and self._header(merged[-1]) == self._header(block)
+            ):
+                merged[-1].content += "\n" + block.content
             else:
-                merged.append(block)
+                merged.append(Block(block.type, block.content, block.page))
 
         return merged
+
+    def _header(self, block: Block) -> str:
+        for line in block.content.splitlines():
+            if line.strip() and not line.strip().startswith("| ---"):
+                return " ".join(line.split()).casefold()
+        return ""
 
     def _cols(self, block: Block) -> int:
         """Numero di colonne di una tabella = numero di '|' nella prima riga."""

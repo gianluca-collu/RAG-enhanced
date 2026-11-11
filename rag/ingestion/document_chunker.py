@@ -13,7 +13,7 @@ from .chunk_record import chunk_to_record
 from .document_intelligence import create_document_intelligence_client
 from .vision import create_vision_client
 from .steps.chunk_assembler import Chunk, ChunkAssembler
-from .steps.document_normalizer import DocumentNormalizer, NormalizedDocument
+from .steps.document_normalizer import DocumentNormalizer
 from .steps.metadata_extractor import MetadataExtractor
 from .steps.section_assembler import SectionAssembler
 from .steps.semantic_enricher import SemanticEnricher
@@ -57,6 +57,7 @@ class ChunkingResult:
     markdown: str
     sections: list[Section]
     chunks: list[Chunk]
+    version_id: str = ""
 
 
 class DocumentChunker:
@@ -121,12 +122,13 @@ class DocumentChunker:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
         logger.info("KB scritta in %s (%d chunk)", path, len(result.chunks))
-    
-    def run(self, source: str | Path) -> ChunkingResult:
+
+    def run(self, source: str | Path, document_key: str | None = None) -> ChunkingResult:
         """Run the document-to-chunks pipeline."""
         start_time = time.time()
         source = Path(source)
-        doc_id = self._file_hash(source)
+        version_id = self._file_hash(source)
+        doc_id = self._document_id(document_key or source.name)
         doc_type = source.suffix.lower().lstrip(".")
 
         logger.info("%s (.%s)", source.name, doc_type)
@@ -151,6 +153,8 @@ class DocumentChunker:
 
         # Step 5: add source metadata to the assembled sections.
         sections_with_metadata = self.metadata_extractor.extract(assembled_sections, source)
+        for section in sections_with_metadata:
+            section.metadata["source_version"] = version_id
 
         # Step 6: enrich the sections with semantic metadata.
         enriched_sections = self.semantic_enricher.enrich(sections_with_metadata)
@@ -171,15 +175,23 @@ class DocumentChunker:
             markdown=normalized_document.markdown,
             sections=enriched_sections,
             chunks=chunks,
+            version_id=version_id,
         )
+
+    @staticmethod
+    def _document_id(document_key: str) -> str:
+        normalized_key = document_key.strip().casefold()
+        if not normalized_key:
+            raise ValueError("Document key cannot be blank")
+        return hashlib.sha256(normalized_key.encode("utf-8")).hexdigest()
 
     def _file_hash(self, source: Path) -> str:
         """
         Calcola hash SHA1 del file.
-        
+
         Legge il file a blocchi per evitare di caricarlo tutto in memoria.
         """
-        digest = hashlib.sha1()
+        digest = hashlib.sha256()
 
         with source.open("rb") as file:
             for chunk in iter(lambda: file.read(1024 * 1024), b""):

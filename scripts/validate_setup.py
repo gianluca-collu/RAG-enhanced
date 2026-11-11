@@ -69,7 +69,7 @@ def check_env():
 
     env_path = PROJECT_ROOT / ".env"
     if not env_path.exists():
-        print("  .env file not found; create it from .env.example")
+        print("  .env file not found; use the Configuration section in README.md")
         return False
 
     env_content = env_path.read_text(encoding="utf-8")

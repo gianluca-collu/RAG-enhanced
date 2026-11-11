@@ -37,7 +37,7 @@ class StructureAnalyzer:
            "# Titolo\nTesto\n## Dettaglio\nAltro testo"
            Esempio output:
            [(1, "Titolo", "Testo"), (2, "Dettaglio", "Altro testo")]"""
-           
+
         pattern = re.compile(r"(?m)^(#{1,6})\s+(.+?)\s*$")
         matches = list(pattern.finditer(markdown))
         parts = []
@@ -53,7 +53,7 @@ class StructureAnalyzer:
             ))
 
         return parts
-    
+
     def _heading_number(self, title: str) -> str | None:
         """Numero gerarchico iniziale del titolo, es. '16.2'.
         Match solo se il numero è seguito da spazio, punto, parentesi o fine:
@@ -107,18 +107,24 @@ class StructureAnalyzer:
             """Genera ID stabile per una sezione usando doc_id e breadcrumb."""
             value = f"{doc_id}:{'/'.join(breadcrumb)}"
             return hashlib.sha1(value.encode()).hexdigest()
-    
+
     def _parse_blocks(self, content: str,page: int | None = None) -> list[Block]:
         """Scompone una sezione solo quando contiene """
-
-        section_type = self._section_type(content)
-
-        if section_type == "TEXT":
-            return [Block(type="TEXT", content=content.strip(), page=page)] if content.strip() else []
-
         blocks = []
         current_type = None
         current_content = []
+        current_page = page
+
+        def flush_current_block():
+            nonlocal current_type, current_content
+            if current_content:
+                blocks.append(Block(
+                    type=current_type,
+                    content="\n".join(current_content),
+                    page=current_page,
+                ))
+                current_type = None
+                current_content = []
 
         for line in content.splitlines():
             cleaned = line.strip()
@@ -126,35 +132,26 @@ class StructureAnalyzer:
             if not cleaned:
                 continue
 
+            if re.fullmatch(r"<!--\s*PageBreak\s*-->", cleaned, re.IGNORECASE):
+                flush_current_block()
+                current_page = current_page + 1 if current_page is not None else None
+                continue
+
             line_type = self._line_type(cleaned)
 
             if current_content and line_type != current_type:
-                blocks.append(
-                    Block(
-                        type=current_type,
-                        content="\n".join(current_content),
-                        page=page,                    # <-- aggiungi
-                    )
-                )
-                current_content = []
+                flush_current_block()
 
             current_type = line_type
             current_content.append(cleaned)
 
-        if current_content:
-            blocks.append(
-                Block(
-                    type=current_type,
-                    content="\n".join(current_content),
-                    page=page,                        # <-- aggiungi
-                )
-            )
+        flush_current_block()
 
         return blocks
 
 
-    
-    
+
+
     def _section_type(self, content: str) -> str:
         """Classifica l'intera sezione come TEXT o MIXED."""
 
@@ -169,31 +166,31 @@ class StructureAnalyzer:
 
     def _line_type(self, line: str) -> str:
         """Riconosce il tipo di una singola riga Markdown."""
-    
+
         line = line.strip()
-    
+
         if line.startswith("|") and line.endswith("|"):
             return "TABLE"
-    
+
         if "![" in line and "]" in line:
             return "IMAGE"
-    
+
         if re.match(r"^(?:[-*+•▪➢]|\d+[.)])\s+", line):
             return "LIST"
-    
+
         return "TEXT"
 
     def analyze(self, markdown: str, doc_id: str, di_result = None) -> list[Section]:
             """Ricostruisce sezioni e sottosezioni dagli heading Markdown."""
-            #1 divide il documento markdown per heading 
+            #1 divide il documento markdown per heading
             document_splitted = self._split_by_heading(markdown)
-            
+
             # Se non ci sono heading, usa l'intero markdown come una sezione di default
             if not document_splitted and markdown.strip():
                 document_splitted = [(1, "Contenuto", markdown)]
-            
+
             #2 aggiunge le sezioni al documento precedente
             docuemnt_splitted_enriched = self.make_create_breadcrumb(document_splitted, doc_id)
             return docuemnt_splitted_enriched
-    
-    
+
+

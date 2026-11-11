@@ -11,6 +11,7 @@ from rag.logger import Logger
 @dataclass
 class _IngestionState:
     source: Path
+    document_key: str | None = None
     chunking_result: ChunkingResult | None = None
     indexed_count: int | None = None
     response: Dict[str, Any] | None = None
@@ -19,13 +20,20 @@ class _IngestionState:
 class IngestionPipeline:
     """Validate, chunk, and index a document in one workflow."""
 
-    def __init__(self, config: Config, index: Any, logger: Logger | None = None):
+    def __init__(
+        self,
+        config: Config,
+        index: Any,
+        logger: Logger | None = None,
+        embed_model: Any = None,
+    ):
         self.config = config
         self.index = index
         self.logger = logger or Logger("IngestionPipeline")
+        self.embed_model = embed_model
 
-    def run(self, file_path: str | Path) -> Dict[str, Any]:
-        state = _IngestionState(Path(file_path))
+    def run(self, file_path: str | Path, document_key: str | None = None) -> Dict[str, Any]:
+        state = _IngestionState(Path(file_path), document_key=document_key)
 
         # Step 1: validate the document and required services.
         state = self._step_1_validate(state)
@@ -51,12 +59,18 @@ class IngestionPipeline:
         return state
 
     def _step_2_chunk(self, state: _IngestionState) -> _IngestionState:
-        state.chunking_result = DocumentChunker(self.config).run(state.source)
+        chunker = DocumentChunker(self.config)
+        if state.document_key is None:
+            state.chunking_result = chunker.run(state.source)
+        else:
+            state.chunking_result = chunker.run(state.source, document_key=state.document_key)
         return state
 
     def _step_3_index(self, state: _IngestionState) -> _IngestionState:
         assert state.chunking_result is not None
-        state.indexed_count = IndexingPipeline(self.index).index_result(state.chunking_result)
+        if self.embed_model is None:
+            raise RuntimeError("An embedding model is required for indexing")
+        state.indexed_count = IndexingPipeline(self.index, self.embed_model).index_result(state.chunking_result)
         return state
 
     def _step_4_build_result(self, state: _IngestionState) -> _IngestionState:

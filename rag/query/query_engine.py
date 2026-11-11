@@ -2,10 +2,12 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
 from rag.config import Config
 from rag.logger import Logger
 from rag.query.prompts import RAG_SYSTEM_PROMPT
+from rag.query.retrieval_export import export_retrieval
 
 
 @dataclass
@@ -80,6 +82,7 @@ class QueryEngine:
 
     def _step_3_format_sources(self, state: _QueryState) -> _QueryState:
         state.sources = self._format_sources(state.source_nodes)
+        export_retrieval(state.query_text, state.sources)
         return state
 
     def _step_4_build_context(self, state: _QueryState) -> _QueryState:
@@ -105,8 +108,20 @@ class QueryEngine:
         return query_text.strip()
 
     def _retrieve_sources(self, query_text: str, top_k: int) -> list:
-        retriever = self.index.as_retriever(similarity_top_k=top_k)
-        return retriever.retrieve(query_text)
+        query_mode = (
+            VectorStoreQueryMode.HYBRID
+            if getattr(self.config, "hybrid_search", False)
+            else VectorStoreQueryMode.DEFAULT
+        )
+        retriever = self.index.as_retriever(
+            similarity_top_k=top_k,
+            vector_store_query_mode=query_mode,
+        )
+        nodes = retriever.retrieve(query_text)
+        min_score = getattr(self.config, "min_relevance_score", None)
+        if min_score is not None:
+            nodes = [node for node in nodes if node.score is not None and node.score >= min_score]
+        return nodes
 
     @staticmethod
     def _format_sources(source_nodes: list) -> list[Dict[str, Any]]:
@@ -121,10 +136,24 @@ class QueryEngine:
 
     @staticmethod
     def _build_context(sources: list[Dict[str, Any]]) -> str:
-        context = "\n\n".join(
-            f"[Fonte {position}]\n{source['content']}"
-            for position, source in enumerate(sources, start=1)
-        )
+        formatted_sources = []
+        for position, source in enumerate(sources, start=1):
+            metadata = source.get("metadata") or {}
+            document = (
+                metadata.get("document_title")
+                or metadata.get("source_file")
+                or metadata.get("source")
+                or "Documento sconosciuto"
+            )
+            section = metadata.get("section_path")
+            page = metadata.get("page")
+            citation = f"[Fonte {position}; documento: {document}"
+            if section:
+                citation += f"; sezione: {section}"
+            if page is not None:
+                citation += f"; pagina: {page}"
+            formatted_sources.append(f"{citation}]\n{source['content']}")
+        context = "\n\n".join(formatted_sources)
         return context or "Nessuna fonte pertinente è stata trovata."
 
     def _generate_answer(

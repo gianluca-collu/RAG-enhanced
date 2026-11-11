@@ -41,7 +41,7 @@ class DocumentNormalizer:
         """
         self.document_intelligence = document_intelligence_client
         self.settings = settings
-        
+
     def normalize(self, source: Path) -> NormalizedDocument:
         """
         Esegue la normalizzazione del documento.
@@ -51,25 +51,25 @@ class DocumentNormalizer:
         Step 3: pulisce il Markdown.
         Step 4: aggiunge il titolo del documento come heading # se mancante.
         Step 5: restituisce un NormalizedDocument riutilizzabile.
-        
+
         Document Intelligence v4.0 (2024-11-30) supporta nativamente:
         PDF, DOCX, XLSX, PPTX, HTML, immagini (JPG, PNG, BMP, TIFF, HEIF).
         Niente conversione necessaria per questi formati.
         """
         result, operation_id = self._analyze_document(source)
         markdown = result.content or ""
-        markdown, self.dropped_tables = self._filter_tables(markdown, result)    
-        markdown = self._strip_figures(markdown)        
+        markdown, self.dropped_tables = self._filter_tables(markdown, result)
+        markdown = self._strip_figures(markdown)
         markdown = self._convert_tables(markdown)
         markdown = self._clean_markdown(markdown)
-        
-        # Assicura che il documento abbia un titolo come heading # 
+
+        # Assicura che il documento abbia un titolo come heading #
         # Se il markdown non inizia con # (heading di livello 1),
         # aggiunge il nome del file come titolo
         if markdown and not markdown.startswith("#"):
             doc_title = source.stem  # Nome del file senza estensione
             markdown = f"# {doc_title}\n\n{markdown}"
-       
+
         return NormalizedDocument(
             markdown=markdown,
             result=result,
@@ -135,7 +135,7 @@ class DocumentNormalizer:
 
         logger.debug(f"Tabelle DI: {len(tables)} | scartate: {len(unique)} | metadata: {len(metadata)}")
         return markdown, metadata
-    
+
     def _box_edges(self, region):
         xs, ys = region.polygon[0::2], region.polygon[1::2]
         return min(xs), min(ys), max(xs), max(ys)
@@ -143,7 +143,7 @@ class DocumentNormalizer:
     def _signature(self, table):
         text = " ".join(c.content.lower().strip() for c in table.cells)
         return re.sub(r"\d+", "#", text)
-    
+
     def _is_layout_grid(self, table) -> bool:
         """Scarta griglie di impaginazione: celle vuote o riempite da simboli."""
         cells = table.cells or []
@@ -152,7 +152,7 @@ class DocumentNormalizer:
         filler = {"", "☐", "☒", "☑", "□", "■", "•", "-", "x", "X"}
         weak = sum(1 for c in cells if c.content.strip() in filler)
         return weak / len(cells) >= 0.5
-    
+
     def _inside_figure(self, table_region, figures) -> bool:
         tx1, ty1, tx2, ty2 = self._box_edges(table_region)
         area = max((tx2 - tx1) * (ty2 - ty1), 0.001)
@@ -166,36 +166,41 @@ class DocumentNormalizer:
             if overlap / area >= 0.60:   # era 0.80
              return True
         return False
-    
+
     def _analyze_document(self, source: Path):
         """
         Analizza il documento originale con Document Intelligence.
 
         Usa il modello prebuilt-layout.
         Richiede il contenuto in formato Markdown.
-        Richiede anche l'output FIGURES per lo Step 3.
+        Richiede l'output FIGURES solo se Vision è abilitato.
         Restituisce result completo e operation_id.
         """
+        analyze_options: dict[str, object] = {
+            "output_content_format": DocumentContentFormat.MARKDOWN,
+        }
+        if getattr(self.settings, "enable_vision", False):
+            analyze_options["output"] = [AnalyzeOutputOption.FIGURES]
+
         with open(source, "rb") as file:
             poller = self.document_intelligence.begin_analyze_document(
                 "prebuilt-layout",
                 body=file,
-                output_content_format=DocumentContentFormat.MARKDOWN,
-                output=[AnalyzeOutputOption.FIGURES],
+                **analyze_options,
             )
 
         result = poller.result()
         operation_id = poller.details["operation_id"]
 
         return result, operation_id
-    
+
     def _convert_tables(self, markdown: str) -> str:
         """Converte le tabelle HTML in Markdown."""
         pattern = r"<table\b.*?</table>"
         tables = re.findall(pattern, markdown, flags=re.IGNORECASE | re.DOTALL)
         for table in tables:
             markdown = markdown.replace(table, markdownify(table, table_infer_header=True).strip())
-        return markdown 
+        return markdown
 
     def _clean_markdown(self, markdown: str) -> str:
         """

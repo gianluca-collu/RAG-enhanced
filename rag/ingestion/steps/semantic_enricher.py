@@ -1,6 +1,5 @@
-import json
 import logging
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 
 from .structure_analyzer import Section
@@ -56,7 +55,7 @@ class SemanticEnricher:
     def __init__(self, client: Optional[Any], settings) -> None:
         """
         Inizializza l'arricchitore semantico.
-        
+
         client: BackendLlmInterface (LLM backend usato per generare metadati).
         settings: config con flag enable_semantic_metadata e semantic_max_workers.
         """

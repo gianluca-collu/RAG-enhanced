@@ -35,7 +35,7 @@ class VisualProcessor:
         self.document_intelligence = document_intelligence_client
         self.vision_describer = vision_describer
         self.settings = settings
-            
+
 
     def _figure_to_block(self,normalized: NormalizedDocument,figure,)-> Optional[Block]:
         """Trasforma una figura DI in un blocco visuale."""
@@ -44,40 +44,40 @@ class VisualProcessor:
         page = figure.bounding_regions[0].page_number
             #if getattr(figure, "bounding_regions", None)
             #else None)
-    
+
         if not self._is_useful_figure(normalized.result, figure):
             logger.debug(f"{figure_id} | pagina {page}: scartata dal filtro dimensionale")
             return None
-    
+
         image_bytes = self._download_image(
             result=normalized.result,
             operation_id=normalized.operation_id,
             figure=figure,
         )
-    
+
         if not image_bytes:
             logger.warning(f"{figure_id}: download immagine vuoto")
             return None
-    
+
         described = self.vision_describer.describe(
             image_name=f"figure_{figure_id}.png",
             image_bytes=image_bytes,
         )
-    
+
         if not described:
             logger.warning(f"{figure_id}: Vision non ha restituito una descrizione")
             return None
-    
+
         kind, description = described
-    
+
         logger.debug(f"{figure_id} | pagina {page}: descritta come {kind}")
-    
+
         return Block(
             type=kind,
             content=description,
             page=figure.bounding_regions[0].page_number,
         )
-    
+
     def _is_useful_figure(self, result, figure) -> bool:
         """
         Decide se una figura DI è utile per il RAG.
@@ -118,7 +118,7 @@ class VisualProcessor:
         image_bytes = response.read() if hasattr(response, "read") else b"".join(response)
 
         return image_bytes
-    
+
 
     def _section_for_page(self,sections: list[Section],page: int | None,) -> Section | None:
         """Trova la sezione della pagina o usa l'ultima disponibile."""
