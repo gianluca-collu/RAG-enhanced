@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -128,6 +129,23 @@ def test_index_chunks_requires_stable_document_id():
         IndexingPipeline(MagicMock(), MagicMock()).index_chunks(
             [{"content": "A sufficiently useful chunk."}]
         )
+
+
+def test_index_jsonl_groups_chunks_by_document(tmp_path):
+    path = tmp_path / "chunks.jsonl"
+    records = [
+        {"doc_id": "doc-a", "content": "Chunk A con contenuto utile."},
+        {"doc_id": "doc-b", "content": "Chunk B con contenuto utile."},
+    ]
+    path.write_text("\n".join(json.dumps(record) for record in records), encoding="utf-8")
+    index = MagicMock()
+    embed_model = MagicMock()
+    embed_model.get_text_embedding_batch.side_effect = lambda texts: [[0.1] for _ in texts]
+
+    indexed = IndexingPipeline(index, embed_model).index_jsonl(path)
+
+    assert indexed == 2
+    assert [call.args[0] for call in index.delete_ref_doc.call_args_list] == ["doc-a", "doc-b"]
 
 
 def test_document_chunker_runs_stages_in_order(tmp_path):

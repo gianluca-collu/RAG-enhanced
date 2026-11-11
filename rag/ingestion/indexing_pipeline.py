@@ -32,8 +32,16 @@ class IndexingPipeline:
         """
         chunks = self._load_jsonl(path)
         logger.info("Loaded %d chunks from %s", len(chunks), path)
-        document_id = chunks[0].get("doc_id", "unknown") if chunks else "unknown"
-        return self.index_chunks(chunks, document_id=document_id)
+        chunks_by_document: dict[str, list[dict]] = {}
+        for chunk in chunks:
+            document_id = chunk.get("doc_id")
+            if not document_id:
+                raise ValueError("Every JSONL chunk must include a stable doc_id")
+            chunks_by_document.setdefault(str(document_id), []).append(chunk)
+        return sum(
+            self.index_chunks(document_chunks, document_id=document_id)
+            for document_id, document_chunks in chunks_by_document.items()
+        )
 
     def index_result(self, result) -> int:
         """Index chunks from a ChunkingResult directly.

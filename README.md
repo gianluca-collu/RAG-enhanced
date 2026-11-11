@@ -119,6 +119,14 @@ Each document has a stable key: the filename by default, or an explicit `documen
 
 Set a unique `API_KEY` in `.env`, then start the API locally with:
 
+Generate a local token with PowerShell:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Store that output as `API_KEY` in the private `.env`; do not reuse an Azure key.
+
 ```bash
 uvicorn rag.api:app --host 127.0.0.1 --port 8000
 ```
@@ -202,6 +210,21 @@ All configuration is managed through environment variables (.env file):
 2. **Retrieval**: Compare vector and hybrid modes using Recall@k or MRR before tuning chunking.
 3. **Cost**: Track embedding and chat usage separately during ingestion and queries.
 4. **Memory**: Chat history is session-local and resets when the Streamlit session ends.
+
+## Retrieval Evaluation
+
+Create a local JSON dataset with the expected section paths from the indexed documents:
+
+```json
+[
+	{
+		"question": "Come si presenta la domanda?",
+		"relevant_sections": ["Bando > Art. 3 Presentazione della domanda"]
+	}
+]
+```
+
+Run `python -m rag.evaluation eval/retrieval.json --top-k 5`. The tool evaluates retrieval only (no chat completion) and reports Recall@5 and MRR@5. It calls Azure embeddings for each question. Keep the question dataset local; `eval/retrieval.json` is ignored by Git.
 
 ## Troubleshooting
 
