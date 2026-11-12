@@ -27,7 +27,8 @@ COPY --from=builder /root/.local /root/.local
 # Set PATH
 ENV PATH=/root/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    AUTH_REQUIRED=true
 
 COPY . .
 
@@ -38,4 +39,4 @@ EXPOSE 8000 8501
 
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
-CMD ["streamlit", "run", "rag/web/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["python", "-m", "rag.web_server"]

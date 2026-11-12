@@ -5,13 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ragsimple"
 version = "1.0.0"
-description = "A lightweight, production-ready RAG chatbot framework"
+description = "A lightweight Azure-backed RAG chatbot framework"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
-authors = [
-    {name = "ASPI Development Team"},
-]
 keywords = ["rag", "chatbot", "azure", "llm", "llama-index"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -26,6 +23,7 @@ classifiers = [
 
 dependencies = [
     "streamlit==1.43.2",
+        "authlib>=1.3.2,<2.0",
     "fastapi==0.115.8",
     "python-multipart>=0.0.9",
     "uvicorn[standard]==0.30.3",

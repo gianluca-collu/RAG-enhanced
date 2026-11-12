@@ -6,10 +6,11 @@ A Retrieval-Augmented Generation (RAG) application built with Azure AI Search, L
 
 - 🤖 **Conversational RAG**: Multi-turn chat with session-scoped memory
 - 🔍 **Hybrid Search**: Vector + keyword search with Azure AI Search
+- 🌐 **Multilingual Retrieval**: Italian-English query expansion with reciprocal-rank fusion
 - 💾 **Memory Management**: Built-in chat history with context awareness
 - 🎯 **Prompt Engineering**: Customizable system prompts for different use cases
 - 🐳 **Docker Compose**: Local development setup for Streamlit and FastAPI
-- 🧪 **Test Suite**: Comprehensive unit and integration tests
+- 🧪 **Test Suite**: Automated API, retrieval, ingestion, and chat tests
 - 📚 **Developer Friendly**: Clear setup instructions and API usage in this README
 
 ## Quick Start
@@ -30,7 +31,7 @@ python -m pip install -e ".[dev]"
 
 ### Configuration
 
-Create a private `.env` file in the project root using the variables listed in the Configuration section below. Keep this file local; it contains credentials and is excluded from Git.
+Copy `.env.example` to `.env` in the project root, then fill in your Azure resource values and credentials. Keep `.env` local; it contains secrets and is excluded from Git.
 
 ### Run Chatbot (Streamlit UI)
 
@@ -74,7 +75,7 @@ project/
 
 1. **RagClient**: creates Azure OpenAI, embedding, and Search clients.
 2. **Ingestion**: normalizes documents with Document Intelligence, creates chunks, then indexes them.
-3. **QueryEngine**: retrieves relevant chunks and generates an answer with Azure OpenAI.
+3. **QueryEngine**: retrieves with the original and translated query, fuses ranked chunks, then generates an answer with Azure OpenAI.
 4. **ChatEngine**: adds session-local conversational context for the Streamlit UI.
 5. **API and Streamlit**: expose search/ingestion endpoints and a local chat interface.
 
@@ -84,6 +85,13 @@ project/
 Document -> Document Intelligence -> sections/chunks -> embeddings -> Azure AI Search
 Question -> vector/hybrid retrieval -> source context -> Azure OpenAI answer
 ```
+
+## Detailed guides
+
+- [Deployment and access management](docs/DEPLOYMENT.md): Azure Container Apps, OIDC login, and an allowlist for inviting and revoking users.
+- [Chunking](docs/CHUNKING.md): document extraction, sections, block types, and chunk construction rules.
+- [Vectorization and search](docs/VECTORIZATION.md): embedded content, Azure AI Search, and multilingual retrieval.
+- [Application architecture](docs/ARCHITECTURE.md): components and end-to-end document and question flows.
 
 ## API Reference
 
@@ -102,6 +110,8 @@ chat.clear_history()
 ```
 
 ## Document Ingestion
+
+The local PDF corpus under `docs/KB/` is intentionally excluded from Git and Docker. Only redistribute source documents when their licenses permit it.
 
 Set `DOCUMENT_INTELLIGENCE_ENDPOINT` and `DOCUMENT_INTELLIGENCE_KEY` in `.env`, then index a supported document with:
 
@@ -131,7 +141,7 @@ Store that output as `API_KEY` in the private `.env`; do not reuse an Azure key.
 uvicorn rag.api:app --host 127.0.0.1 --port 8000
 ```
 
-`GET /health` is public. All other endpoints require `Authorization: Bearer <API_KEY>`. `POST /search` accepts `{"query": "...", "top_k": 5}`; `POST /ingest` accepts a multipart `file` and an optional `document_key`; `GET /index/documents` counts distinct document IDs, not chunks; and `DELETE /index?confirm=true` removes the configured index. Keep this development API on localhost unless you add production-grade identity, authorization, rate limits, and network controls. The index name is required in configuration and is created automatically if it does not exist. Interactive API documentation is available at `/docs`.
+`GET /health` is public. All other endpoints require `Authorization: Bearer <API_KEY>`. `POST /search` accepts `{"query": "...", "top_k": 5}` with `top_k` from 1 to 50; `POST /ingest` accepts a multipart `file` and an optional `document_key`; `GET /index/documents` counts distinct document IDs, not chunks; and `DELETE /index?confirm=true` removes the configured index. Keep this development API on localhost unless you add production-grade identity, authorization, rate limits, and network controls. The index name is required in configuration and is created automatically if it does not exist. Interactive API documentation is available at `/docs`.
 
 For retrieval diagnostics, set `enabled` to `true` in `rag/query/retrieval_debug.json`. Each query appends one row per retrieved chunk to `output/retrieval_chunks.xlsx`, including the question, rank, document, section, page, similarity score, and chunk text. Set it back to `false` to stop exporting. The workbook contains query and document text, so keep it local and handle it as sensitive data.
 
@@ -180,6 +190,20 @@ docker run --rm --env-file .env -p 127.0.0.1:8501:8501 ragsimple:latest
 ```
 
 For both web and API services, create the private `.env` file using the Configuration table and run `docker compose up --build`. Both services bind to localhost: Streamlit on port `8501` and FastAPI on port `8000`.
+### Online access and account management
+
+The container image requires authentication by default. Local Docker Compose explicitly defaults `AUTH_REQUIRED` to `false` because its ports are bound to localhost. For an online deployment, set `AUTH_REQUIRED=true`, configure an OpenID Connect (OIDC) provider, and expose only the Streamlit service on HTTPS. The API should remain private unless a separate authenticated use case requires it.
+
+Configure these values as environment variables in the hosting platform; store `OIDC_COOKIE_SECRET` and `OIDC_CLIENT_SECRET` as platform secrets:
+
+- `OIDC_REDIRECT_URI`: the public app URL ending in `/oauth2callback`.
+- `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and `OIDC_METADATA_URL`: values from the chosen OIDC provider (for example, Microsoft Entra ID or Google).
+- `OIDC_COOKIE_SECRET`: a strong random secret used to sign the login cookie.
+- `ALLOWED_USER_EMAILS`: comma-separated email addresses allowed to use the app.
+
+The app writes Streamlit's OIDC `secrets.toml` at container startup from these runtime values; it is not included in the Docker image or Git. To grant access, add an email to `ALLOWED_USER_EMAILS` in the hosting platform and activate the updated configuration. To revoke access, remove it and activate the update; the allowlist is checked on each app interaction, so an existing login cookie does not bypass removal. Do not enable public self-registration without usage controls: model and search costs are charged to the application's Azure resources.
+
+For Azure Container Apps, deploy the web container with external HTTPS ingress on port `8501`, configure its OIDC values and allowlist, and leave the API without public ingress. Set the OIDC provider's callback URL to the exact `OIDC_REDIRECT_URI` value.
 
 ## Configuration
 
@@ -196,6 +220,13 @@ All configuration is managed through environment variables (.env file):
 | `OPENAI_DEPLOYMENT_NAME` | Actual Azure chat deployment name | Yes |
 | `OPENAI_API_VERSION` | Azure OpenAI API version | Yes |
 | `API_KEY` | Bearer token protecting non-health API routes | Required for API |
+| `AUTH_REQUIRED` | Require OIDC login for Streamlit | No (Docker image defaults to `true`; local Compose defaults to `false`) |
+| `ALLOWED_USER_EMAILS` | Comma-separated allowlist of Streamlit user emails | Required when Streamlit authentication is enabled |
+| `OIDC_REDIRECT_URI` | Absolute OIDC callback URL ending in `/oauth2callback` | Required when Streamlit authentication is enabled |
+| `OIDC_COOKIE_SECRET` | Random secret for Streamlit's authentication cookie | Required when Streamlit authentication is enabled |
+| `OIDC_CLIENT_ID` | OIDC application client ID | Required when Streamlit authentication is enabled |
+| `OIDC_CLIENT_SECRET` | OIDC application client secret | Required when Streamlit authentication is enabled |
+| `OIDC_METADATA_URL` | OIDC discovery document URL | Required when Streamlit authentication is enabled |
 | `EMBEDDING_MODEL` | Embedding model name | No (default: text-embedding-ada-002) |
 | `EMBEDDING_DEPLOYMENT_NAME` | Actual Azure embeddings deployment name | Yes |
 | `EMBEDDING_DIMENSIONS` | Vector size; must match model and index | No (default: 1536) |

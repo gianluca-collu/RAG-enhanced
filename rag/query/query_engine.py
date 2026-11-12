@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from llama_index.core.schema import NodeWithScore
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
 from rag.config import Config
@@ -117,11 +118,67 @@ class QueryEngine:
             similarity_top_k=top_k,
             vector_store_query_mode=query_mode,
         )
-        nodes = retriever.retrieve(query_text)
         min_score = getattr(self.config, "min_relevance_score", None)
-        if min_score is not None:
-            nodes = [node for node in nodes if node.score is not None and node.score >= min_score]
-        return nodes
+        translated_query = self._translate_query_to_other_language(query_text)
+        retrieval_queries = [query_text]
+        if translated_query.casefold() != query_text.casefold():
+            retrieval_queries.append(translated_query)
+
+        result_sets = []
+        for retrieval_query in retrieval_queries:
+            nodes = retriever.retrieve(retrieval_query)
+            if min_score is not None:
+                nodes = [node for node in nodes if node.score is not None and node.score >= min_score]
+            result_sets.append(nodes)
+
+        if len(result_sets) == 1:
+            return result_sets[0][:top_k]
+        return self._fuse_results(result_sets, top_k)
+
+    def _translate_query_to_other_language(self, query_text: str) -> str:
+        try:
+            response = self.llm.chat([
+                ChatMessage(
+                    role=MessageRole.SYSTEM,
+                    content=(
+                        "The search query may be in Italian or English. Translate it into the other "
+                        "language: Italian to English, or English to Italian. If it is in another "
+                        "language, translate it into English. Return only the translated query, "
+                        "preserving names, numbers, acronyms, and technical terms. Do not answer it."
+                    ),
+                ),
+                ChatMessage(role=MessageRole.USER, content=query_text),
+            ])
+        except Exception as exc:
+            self.logger.error(f"Query translation failed; using original query: {exc}")
+            return query_text
+
+        translated_query = response.message.content
+        if not isinstance(translated_query, str) or not translated_query.strip():
+            return query_text
+        return translated_query.strip().strip('"').strip()
+
+    @staticmethod
+    def _fuse_results(result_sets: list[list], top_k: int, rrf_constant: int = 60) -> list:
+        fused_scores: dict[str, float] = {}
+        fused_nodes: dict[str, Any] = {}
+
+        for nodes in result_sets:
+            for rank, result in enumerate(nodes, start=1):
+                node = result.node
+                node_id = getattr(node, "node_id", None) or str(id(node))
+                fused_nodes.setdefault(node_id, node)
+                fused_scores[node_id] = fused_scores.get(node_id, 0.0) + 1 / (rrf_constant + rank)
+
+        ordered = sorted(
+            fused_nodes.items(),
+            key=lambda item: fused_scores[item[0]],
+            reverse=True,
+        )[:top_k]
+        return [
+            NodeWithScore(node=node, score=fused_scores[node_id])
+            for node_id, node in ordered
+        ]
 
     @staticmethod
     def _format_sources(source_nodes: list) -> list[Dict[str, Any]]:

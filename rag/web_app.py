@@ -1,9 +1,12 @@
+import os
+
 import streamlit as st
 
 from rag.config import Config
 from rag.rag_client import RagClient
 from rag.query import ChatEngine
 from rag.logger import Logger
+from rag.web_auth import auth_is_required, is_user_allowed, parse_allowed_user_emails
 
 
 # Page configuration
@@ -28,9 +31,32 @@ def initialize_app():
         raise
 
 
+def require_user_access():
+    if not auth_is_required(os.getenv("AUTH_REQUIRED", "false")):
+        return
+
+    user = st.experimental_user
+    if not user.is_logged_in:
+        st.title("RAGSimple")
+        st.info("Accedi con il tuo account autorizzato per usare l'app.")
+        if st.button("Accedi"):
+            st.login()
+        st.stop()
+
+    allowed_emails = parse_allowed_user_emails(os.getenv("ALLOWED_USER_EMAILS", ""))
+    if not is_user_allowed(getattr(user, "email", None), allowed_emails):
+        st.error("Questo account non è autorizzato a usare l'app.")
+        st.caption("Chiedi al proprietario di aggiungere il tuo indirizzo email agli accessi autorizzati.")
+        if st.button("Esci"):
+            st.logout()
+        st.stop()
+
+
 # Main app
 def main():
     """Main Streamlit application."""
+
+    require_user_access()
 
     # Initialize
     try:

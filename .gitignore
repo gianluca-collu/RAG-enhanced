@@ -1,5 +1,7 @@
 .env
 .env.*
+!.env.example
+.streamlit/secrets.toml
 .venv/
 venv/
 __pycache__/
@@ -17,3 +19,4 @@ dist/
 *.egg-info/
 docs/Guida_Tecnica_RAG.docx
 docs/Bando_1_GIUR_EC.pdf
+docs/KB/

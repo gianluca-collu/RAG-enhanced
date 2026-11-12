@@ -5,6 +5,7 @@ from openpyxl import load_workbook
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from llama_index.core.base.llms.types import MessageRole
+from llama_index.core.schema import TextNode
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
 from rag.query.prompts import RAG_SYSTEM_PROMPT
@@ -65,42 +66,91 @@ class TestRagClient:
         client.logger = MagicMock()
         client._index = MagicMock()
         client._llm = MagicMock()
-        client._llm.chat.return_value = SimpleNamespace(
-            message=SimpleNamespace(content="Risposta dalle fonti")
-        )
+        client._llm.chat.side_effect = [
+            SimpleNamespace(message=SimpleNamespace(content="How many organizations were contacted?")),
+            SimpleNamespace(message=SimpleNamespace(content="Sono state contattate 74 organizzazioni.")),
+        ]
 
-        node = SimpleNamespace(
-            node=SimpleNamespace(
-                get_content=lambda: "La policy prevede trenta giorni.",
-                metadata={"source": "policy.pdf"},
-            ),
-            score=0.91,
+        italian_node = TextNode(
+            id_="italian-chunk",
+            text="La policy prevede trenta giorni.",
+            metadata={"source": "policy.pdf"},
         )
-        client._index.as_retriever.return_value.retrieve.return_value = [node]
+        english_node = TextNode(
+            id_="agentic-chunk",
+            text="A total of 74 organisations were contacted.",
+            metadata={"source": "agentic.pdf"},
+        )
+        client._index.as_retriever.return_value.retrieve.side_effect = [
+            [SimpleNamespace(node=italian_node, score=0.91)],
+            [
+                SimpleNamespace(node=english_node, score=0.90),
+                SimpleNamespace(node=italian_node, score=0.89),
+            ],
+        ]
         steps = MagicMock()
         steps.attach_mock(client._index.as_retriever, "create_retriever")
         steps.attach_mock(client._index.as_retriever.return_value.retrieve, "retrieve")
         steps.attach_mock(client._llm.chat, "generate")
 
-        result = client.query("Qual è il termine?")
+        query = "Quante organizzazioni sono state contattate?"
+        result = client.query(query)
 
         assert [call[0] for call in steps.mock_calls] == [
             "create_retriever",
+            "generate",
+            "retrieve",
             "retrieve",
             "generate",
         ]
-        messages = client._llm.chat.call_args.args[0]
+        assert client._llm.chat.call_count == 2
+        retrieval_calls = client._index.as_retriever.return_value.retrieve.call_args_list
+        assert [call.args[0] for call in retrieval_calls] == [
+            query,
+            "How many organizations were contacted?",
+        ]
+        messages = client._llm.chat.call_args_list[-1].args[0]
         assert messages[0].role == MessageRole.SYSTEM
         assert messages[0].content == RAG_SYSTEM_PROMPT
         assert "La policy prevede trenta giorni." in messages[1].content
+        assert "A total of 74 organisations were contacted." in messages[1].content
         assert "[Fonte 1; documento: policy.pdf" in messages[1].content
-        assert "Qual è il termine?" in messages[1].content
-        assert result["answer"] == "Risposta dalle fonti"
-        assert result["sources"][0]["metadata"] == {"source": "policy.pdf"}
+        assert query in messages[1].content
+        assert result["answer"] == "Sono state contattate 74 organizzazioni."
+        assert len(result["sources"]) == 2
+        assert {source["metadata"]["source"] for source in result["sources"]} == {
+            "policy.pdf",
+            "agentic.pdf",
+        }
         client._index.as_retriever.assert_called_once_with(
             similarity_top_k=4,
             vector_store_query_mode=VectorStoreQueryMode.HYBRID,
         )
+
+    def test_english_query_is_also_retrieved_in_italian(self):
+        engine = QueryEngine(
+            config=SimpleNamespace(hybrid_search=True, min_relevance_score=None),
+            index=MagicMock(),
+            llm=MagicMock(),
+        )
+        engine.llm.chat.return_value = SimpleNamespace(
+            message=SimpleNamespace(content="Quante organizzazioni sono state contattate?")
+        )
+        english_node = TextNode(id_="english", text="organizations were contacted", metadata={})
+        italian_node = TextNode(id_="italian", text="organizzazioni contattate", metadata={})
+        engine.index.as_retriever.return_value.retrieve.side_effect = [
+            [SimpleNamespace(node=english_node, score=0.9)],
+            [SimpleNamespace(node=italian_node, score=0.8)],
+        ]
+
+        results = engine._retrieve_sources("How many organizations were contacted?", 5)
+
+        calls = engine.index.as_retriever.return_value.retrieve.call_args_list
+        assert [call.args[0] for call in calls] == [
+            "How many organizations were contacted?",
+            "Quante organizzazioni sono state contattate?",
+        ]
+        assert {result.node.node_id for result in results} == {"english", "italian"}
 
     def test_query_retrieval_applies_configured_score_cutoff(self):
         engine = QueryEngine(
