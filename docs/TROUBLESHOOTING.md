@@ -18,7 +18,7 @@ pip install -e ".[dev]"
 
 ## Environment configuration
 
-Create `.env` from `.env.example` and fill in the required Azure settings:
+Create a private `.env` file in the project root using the variable table in the README. Do not commit this file. Configure at least:
 
 - `OPENAI_URL` and `OPENAI_KEY`
 - `SEARCH_URL`, `SEARCH_KEY`, and `INDEX_NAME`

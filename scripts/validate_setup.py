@@ -69,7 +69,7 @@ def check_env():
 
     env_path = PROJECT_ROOT / ".env"
     if not env_path.exists():
-        print("  .env file not found; create it from .env.example")
+        print("  .env file not found; use the Configuration section in README.md")
         return False
 
     env_content = env_path.read_text(encoding="utf-8")
@@ -109,7 +109,7 @@ def check_rag_client():
     print("\nTesting RAG client import...")
 
     try:
-        from rag.client import RagClient
+        from rag.rag_client import RagClient
 
         print(f"  OK {RagClient.__name__} can be imported")
         return True

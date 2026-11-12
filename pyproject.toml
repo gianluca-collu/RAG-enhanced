@@ -5,13 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ragsimple"
 version = "1.0.0"
-description = "A lightweight, production-ready RAG chatbot framework"
+description = "A lightweight Azure-backed RAG chatbot framework"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
-authors = [
-    {name = "ASPI Development Team"},
-]
 keywords = ["rag", "chatbot", "azure", "llm", "llama-index"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -26,6 +23,7 @@ classifiers = [
 
 dependencies = [
     "streamlit==1.43.2",
+        "authlib>=1.3.2,<2.0",
     "fastapi==0.115.8",
     "python-multipart>=0.0.9",
     "uvicorn[standard]==0.30.3",
@@ -71,17 +69,11 @@ dev = [
 [project.scripts]
 ragsimple = "rag.main:cli"
 
-[project.urls]
-Homepage = "https://github.com/yourusername/ragsimple"
-Documentation = "https://github.com/yourusername/ragsimple/wiki"
-Repository = "https://github.com/yourusername/ragsimple.git"
-Issues = "https://github.com/yourusername/ragsimple/issues"
-
 [tool.setuptools.packages.find]
 include = ["rag*"]
 
 [tool.setuptools.package-data]
-"rag.chat" = ["prompts.json"]
+"rag.query" = ["prompts.json", "retrieval_debug.json"]
 
 [tool.black]
 line-length = 120
@@ -90,8 +82,10 @@ target-version = ['py39', 'py310', 'py311']
 [tool.ruff]
 line-length = 120
 target-version = "py39"
+
+[tool.ruff.lint]
 select = ["E", "F", "W"]
-ignore = ["E501", "W503"]
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.9"

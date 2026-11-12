@@ -2,22 +2,22 @@ from unittest.mock import MagicMock, patch
 
 from llama_index.vector_stores.azureaisearch import IndexManagement
 
-from rag.client.rag_client import RagClient
+from rag.index_store import IndexStore
 
 
 def test_vector_store_creates_missing_index_with_chunk_schema(mock_config):
-    client = RagClient.__new__(RagClient)
+    client = IndexStore.__new__(IndexStore)
     client.config = mock_config
     client.logger = MagicMock()
     index_client = MagicMock()
     vector_store = MagicMock()
 
     with patch(
-        "rag.client.rag_client.SearchIndexClient",
+        "rag.index_store.SearchIndexClient",
         return_value=index_client,
     ) as create_index_client:
         with patch(
-            "rag.client.rag_client.AzureAISearchVectorStore",
+            "rag.index_store.AzureAISearchVectorStore",
             return_value=vector_store,
         ) as create_vector_store:
             result = client._create_vector_store()

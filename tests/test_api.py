@@ -59,11 +59,12 @@ def test_search_requires_bearer_token(monkeypatch):
 def test_ingest_upload_calls_rag_chunker(monkeypatch):
     monkeypatch.setenv("API_KEY", "test-token")
     rag_client = MagicMock()
-    rag_client.ingest_file.side_effect = lambda path: {
+    rag_client.ingest_file.side_effect = lambda path, document_key=None: {
         "doc_id": "doc-123",
         "source": Path(path).name,
         "chunk_count": 4,
         "indexed_count": 4,
+        "document_key": document_key,
     }
     app.dependency_overrides[get_rag_client] = lambda: rag_client
     client = TestClient(app)
@@ -78,6 +79,7 @@ def test_ingest_upload_calls_rag_chunker(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["indexed_count"] == 4
+    assert response.json()["document_key"] == "manual.pdf"
     rag_client.ingest_file.assert_called_once()
 
 
@@ -95,6 +97,26 @@ def test_ingest_rejects_unsupported_file_type(monkeypatch):
         app.dependency_overrides.clear()
 
     assert response.status_code == 415
+
+
+def test_ingest_accepts_explicit_document_key(monkeypatch):
+    monkeypatch.setenv("API_KEY", "test-token")
+    rag_client = MagicMock()
+    rag_client.ingest_file.return_value = {"doc_id": "doc-id", "indexed_count": 1}
+    app.dependency_overrides[get_rag_client] = lambda: rag_client
+    client = TestClient(app)
+    try:
+        response = client.post(
+            "/ingest",
+            headers={"Authorization": "Bearer test-token"},
+            data={"document_key": "manuali/HR"},
+            files={"file": ("manual.pdf", b"pdf test bytes", "application/pdf")},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert rag_client.ingest_file.call_args.kwargs["document_key"] == "manuali/HR"
 
 
 def test_delete_index_requires_explicit_confirmation(monkeypatch):
@@ -135,7 +157,7 @@ def test_count_documents_counts_unique_document_ids(monkeypatch):
     search_client.search.return_value = [
         {"doc_id": "doc-a"},
         {"doc_id": "doc-a"},
-        {"doc_id": "doc-b"},
+        {"doc_id": None, "metadata": '{"doc_id": "doc-b"}'},
         {"doc_id": None},
     ]
     configure_search_clients(monkeypatch, index_client, search_client)
@@ -147,4 +169,4 @@ def test_count_documents_counts_unique_document_ids(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"index": "knowledge-base", "document_count": 2}
-    search_client.search.assert_called_once_with(search_text="*", select=["doc_id"])
+    search_client.search.assert_called_once_with(search_text="*", select=["doc_id", "metadata"])
